@@ -1,14 +1,11 @@
-version: '3.8'
-
 services:
-  # PHP 8.3 + Laravel (edytowany w VSCode na hoście)
   app:
     build:
       context: .
       dockerfile: Dockerfile-php
     container_name: webmarkers-php
     volumes:
-      - ./app:/var/www/html  # Montowanie kodu Laravela z hosta
+      - ./app:/var/www/html
     environment:
       - DB_HOST=mysql
       - DB_DATABASE=webmarkers
@@ -19,21 +16,19 @@ services:
     depends_on:
       - mysql
 
-  # Serwer Nginx
   webserver:
     image: nginx:alpine
     container_name: webmarkers-nginx
     ports:
       - "8080:80"
     volumes:
-      - ./app:/var/www/html  # Współdzielony kod Laravela
+      - ./app:/var/www/html
       - ./nginx/default.conf:/etc/nginx/conf.d/default.conf
     networks:
       - webmarkers-network
     depends_on:
       - app
 
-  # Baza danych MySQL
   mysql:
     image: mysql:8.0
     container_name: webmarkers-mysql
@@ -45,7 +40,6 @@ services:
     networks:
       - webmarkers-network
 
-  # phpMyAdmin
   phpmyadmin:
     image: phpmyadmin/phpmyadmin
     container_name: webmarkers-phpmyadmin
@@ -58,7 +52,6 @@ services:
     depends_on:
       - mysql
 
-  # Python API (YOLO-NAS/FastAPI) - edytowany w VSCode na hoście
   yolo-api:
     build:
       context: .
@@ -67,14 +60,14 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./python-api:/app  # Montowanie kodu Pythona z hosta
+      - ./python-api:/app
     environment:
       - PYTHONUNBUFFERED=1
-      - FASTAPI_RELOAD=1  # Auto-reload dla developmentu
+      - FASTAPI_RELOAD=1
+      - YOLO_CONFIG_DIR=/app/yolo-config
     networks:
       - webmarkers-network
 
-# Sieć i wolumeny
 networks:
   webmarkers-network:
     driver: bridge

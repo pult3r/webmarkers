@@ -5,3 +5,6 @@ ultralytics
 opencv-python-headless
 dlib
 face_recognition
+torch
+transformers
+sentencepiece

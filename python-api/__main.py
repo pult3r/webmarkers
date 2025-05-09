@@ -4,34 +4,32 @@ import numpy as np
 import face_recognition
 import pickle
 from ultralytics import YOLO
-from transformers import Blip2Processor, Blip2ForConditionalGeneration
-import torch
 from PIL import Image
 import io
+import torch
+from transformers import Blip2Processor, Blip2ForConditionalGeneration
+
+# Wczytaj znane twarze
+with open("face_encodings.pkl", "rb") as f:
+    known_faces = pickle.load(f)
 
 # Inicjalizacja FastAPI
 app = FastAPI()
 
-# YOLO
-model = YOLO("yolov8n.pt")
+# Inicjalizacja YOLO
+yolo_model = YOLO("yolov8n.pt")
 
-# BLIP-2
+# Inicjalizacja BLIP-2
 device = "cuda" if torch.cuda.is_available() else "cpu"
-processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
-model_blip = Blip2ForConditionalGeneration.from_pretrained(
-    "Salesforce/blip2-opt-2.7b",
-    torch_dtype=torch.float16 if device == "cuda" else torch.float32
-)
-model_blip.to(device)
+processor = Blip2Processor.from_pretrained("Salesforce/blip2-flan-t5-xl")
+model_vqa = Blip2ForConditionalGeneration.from_pretrained("Salesforce/blip2-flan-t5-xl").to(device)
 
-# Znane twarze
-with open("face_encodings.pkl", "rb") as f:
-    known_faces = pickle.load(f)
+# --- ENDPOINTY ---
 
 @app.post("/detect")
 async def detect_objects(file: UploadFile = File(...)):
     image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
-    results = model.predict(image)
+    results = yolo_model.predict(image)
     return {"detections": results[0].tojson()}
 
 @app.post("/face-detect")
@@ -42,7 +40,6 @@ async def face_detect(file: UploadFile = File(...)):
     rgb_img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
     face_locations = face_recognition.face_locations(rgb_img)
-
     faces = [
         {"top": top, "right": right, "bottom": bottom, "left": left}
         for top, right, bottom, left in face_locations
@@ -85,13 +82,20 @@ async def face_recognize(file: UploadFile = File(...), tolerance: float = 0.6):
 
     return {"results": results}
 
-@app.post("/describe")
-async def describe_image(file: UploadFile = File(...)):
-    contents = await file.read()
-    image = Image.open(io.BytesIO(contents)).convert("RGB")
-    inputs = processor(images=image, return_tensors="pt").to(device, torch.float16 if device == "cuda" else torch.float32)
+@app.post("/ask-image-question")
+async def ask_image_question(
+    file: UploadFile = File(...), 
+    question: str = "What is happening in the image?",
+):
+    image_bytes = await file.read()
+    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
 
-    generated_ids = model_blip.generate(**inputs)
-    description = processor.decode(generated_ids[0], skip_special_tokens=True)
+    # BLIP-2: odpowiedź po angielsku
+    inputs = processor(images=image, text=question, return_tensors="pt").to(device)
+    out = model_vqa.generate(**inputs)
+    answer_en = processor.decode(out[0], skip_special_tokens=True)
 
-    return {"description": description}
+    return {
+        "question": question,
+        "answer": answer_en
+    }

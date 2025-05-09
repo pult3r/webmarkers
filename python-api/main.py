@@ -9,11 +9,13 @@ import torch
 from PIL import Image
 import io
 
+
 # Inicjalizacja FastAPI
 app = FastAPI()
 
 # YOLO
 model = YOLO("yolov8n.pt")
+model_pose = YOLO("yolov8n-pose.pt")      # do detekcji sylwetki
 
 # BLIP-2
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -33,6 +35,20 @@ async def detect_objects(file: UploadFile = File(...)):
     image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
     results = model.predict(image)
     return {"detections": results[0].tojson()}
+
+@app.post("/pose-detect")
+async def pose_detect(file: UploadFile = File(...)):
+    image = cv2.imdecode(np.frombuffer(await file.read(), np.uint8), cv2.IMREAD_COLOR)
+    results = model_pose.predict(image)
+    
+    keypoints_data = []
+    if results[0].keypoints:
+        for person in results[0].keypoints.xy.cpu().numpy():
+            keypoints = [{"x": float(p[0]), "y": float(p[1])} for p in person]
+            keypoints_data.append(keypoints)
+    
+    return {"poses": keypoints_data}
+
 
 @app.post("/face-detect")
 async def face_detect(file: UploadFile = File(...)):

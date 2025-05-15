@@ -8,3 +8,4 @@ face_recognition
 torch
 transformers
 sentencepiece
+scikit-learn

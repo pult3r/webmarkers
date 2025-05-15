@@ -8,6 +8,8 @@ from transformers import Blip2Processor, Blip2ForConditionalGeneration
 import torch
 from PIL import Image
 import io
+from sklearn.cluster import KMeans
+from collections import Counter
 
 
 # Inicjalizacja FastAPI
@@ -25,6 +27,9 @@ model_blip = Blip2ForConditionalGeneration.from_pretrained(
     torch_dtype=torch.float16 if device == "cuda" else torch.float32
 )
 model_blip.to(device)
+
+def rgb_to_hex(rgb):
+    return '#{:02x}{:02x}{:02x}'.format(*rgb)
 
 # Znane twarze
 with open("face_encodings.pkl", "rb") as f:
@@ -49,6 +54,31 @@ async def pose_detect(file: UploadFile = File(...)):
     
     return {"poses": keypoints_data}
 
+@app.post("/color-detect")
+async def color_detect(file: UploadFile = File(...), num_colors: int = 5):
+    contents = await file.read()
+    np_img = np.frombuffer(contents, np.uint8)
+    img = cv2.imdecode(np_img, cv2.IMREAD_COLOR)
+
+    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img_rgb = img_rgb.reshape((-1, 3))
+
+    kmeans = KMeans(n_clusters=num_colors, n_init=10)
+    kmeans.fit(img_rgb)
+
+    counter = Counter(kmeans.labels_)
+    center_colors = kmeans.cluster_centers_
+
+    # Posortuj kolory wg liczności występowania (najwięcej pikseli)
+    #ranked_colors = [tuple(map(int, center_colors[i])) for i, _ in counter.most_common(num_colors)]
+
+    ranked_colors = [
+        rgb_to_hex(tuple(map(int, center_colors[i])))
+        for i, _ in counter.most_common(num_colors)
+    ]
+
+
+    return {"dominant_colors_rgb": ranked_colors}
 
 @app.post("/face-detect")
 async def face_detect(file: UploadFile = File(...)):

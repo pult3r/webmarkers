@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y \
     libx11-dev \
     libgl1 \
     libglib2.0-0 \
+    git \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -17,7 +19,13 @@ RUN mkdir -p /app/yolo-config && chmod 777 /app/yolo-config
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Instalacja FAISS (CPU version)
+RUN pip install faiss-cpu --no-cache-dir
+
+# Instalacja CLIP (wymaga git)
+RUN pip install git+https://github.com/openai/CLIP.git --no-cache-dir
+
 COPY ./python-api /app
 
-# Uruchomienie FastAPI z autoreloadem
+# Uruchomienie FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

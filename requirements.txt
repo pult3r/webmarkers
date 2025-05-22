@@ -9,3 +9,5 @@ torch
 transformers
 sentencepiece
 scikit-learn
+faiss-cpu
+git+https://github.com/openai/CLIP.git

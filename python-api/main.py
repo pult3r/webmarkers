@@ -1,4 +1,3 @@
-
 from fastapi import FastAPI, File, UploadFile, Form
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,13 +7,22 @@ import shutil
 import os
 import uuid
 from pathlib import Path
+import io
+import base64
+from PIL import Image, ImageDraw
+import numpy as np
+import cv2
 
-from modules.detect import detect_objects
-from modules.pose import detect_pose
+from fastapi.responses import FileResponse
+from modules import detect, pose_detect
+from fastapi import Request
+
+from modules.detect import run_detect
+from modules.pose_detect import run_pose_detect
 from modules.color import detect_dominant_colors
 from modules.face import detect_faces, recognize_face
 from modules.describe import describe_image
-from modules.clip_module import embed_clip, search_clip, get_metadata_by_id
+from modules.clip_module import embed_clip_full_response, search_clip, get_metadata_by_id
 from modules.semantic import get_semantic_description
 from modules.visualize import visualize_image_by_id, visualize_base64_by_id
 
@@ -43,15 +51,23 @@ def save_uploaded_image(file: UploadFile) -> str:
 
 # -------------------- ENDPOINTS --------------------
 
-@app.post("/detect", tags=["Object Detection"])
-def detect(file: UploadFile = File(...)):
-    path = save_uploaded_image(file)
-    return detect_objects(path)
 
-@app.post("/pose-detect", tags=["Pose Detection"])
-def pose_detect(file: UploadFile = File(...)):
-    path = save_uploaded_image(file)
-    return detect_pose(path)
+@app.get("/image/{image_id}", summary="Show image")
+async def get_image(image_id: str):
+    path = f"saved_images/{image_id}.png"
+    if os.path.exists(path):
+        return FileResponse(path, media_type="image/png")
+    return {"error": "Image not found"}
+
+@app.post("/detect", summary="Object Detection: yolov8n.pt - bounding box, class, name, confidence, image_url, image_base64 [image contain red border]")
+async def detect_objects(request: Request, file: UploadFile = File(...)):
+    host = str(request.base_url).rstrip("/")
+    return await detect.run_detect(file, host)
+
+@app.post("/pose-detect", summary="Pose Detection : yolov8n-pose.pt - bounding box, keypoints, class, name, confidence, image_url, image_base64 [image contain red border and keypoints]")
+async def pose_objects(request: Request, file: UploadFile = File(...)):
+    host = str(request.base_url).rstrip("/")
+    return await pose_detect.run_pose_detect(file, host)
 
 @app.post("/color-detect", tags=["Color Detection"])
 def color_detect(file: UploadFile = File(...)):
@@ -74,9 +90,8 @@ def describe(file: UploadFile = File(...)):
     return describe_image(path)
 
 @app.post("/clip-embed", tags=["CLIP"])
-def clip_embed(file: UploadFile = File(...)):
-    path = save_uploaded_image(file)
-    return embed_clip(path)
+async def clip_embed(file: UploadFile = File(...)):
+    return await embed_clip_full_response(file)
 
 @app.post("/clip-search", tags=["CLIP"])
 def clip_search(file: UploadFile = File(...)):

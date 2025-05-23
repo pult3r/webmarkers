@@ -11,3 +11,4 @@ sentencepiece
 scikit-learn
 faiss-cpu
 git+https://github.com/openai/CLIP.git
+sentence-transformers

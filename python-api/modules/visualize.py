@@ -1,5 +1,5 @@
 import base64
-from modules.clip_module import map
+#from modules.clip_module import map
 
 def visualize_image_by_id(id):
     return {'path': map.get(id)}
